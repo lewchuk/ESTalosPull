@@ -1,0 +1,2 @@
+A query script to pull talos data from ES, uses pyes elastic search client.
+http://pypi.python.org/pypi/pyes/
