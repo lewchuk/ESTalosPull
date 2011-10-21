@@ -37,8 +37,8 @@ def request_data(args):
       tree = tree[tree.find('-')+1:]
     query.add(pyes.filters.TermFilter("tree", tree))
 
-  if "test" in args:
-    query.add(pyes.filters.TermFilter("testsuite", args.get("test")))
+  if "testsuite" in args:
+    query.add(pyes.filters.TermFilter("testsuite", args.get("testsuite")))
 
   if "testgroup" in args:
     query.add(pyes.filters.TermFilter("testgroup", args.get("testgroup")))
@@ -96,21 +96,29 @@ def cli():
   usage = "usage: %prog [options]"
   parser = optparse.OptionParser(usage=usage)
 
+  # server spec options
   parser.add_option("--es-server", dest="es_server", help="ES Server to query", action="store", default="localhost:9200")
   parser.add_option("--index", dest="index", help="Index to query (optional)", action="store")
+
+  # query spec options
   parser.add_option("--from", dest="from_date", help="Start Date of query (also needs --to)", action="store")
   parser.add_option("--to", dest="to", help="End Date of query (also needs --from)", action="store")
   parser.add_option("--tree", dest="tree", help="Tree to query", action="store")
-  parser.add_option("--test", dest="test", help="Test to query", action="store")
+  parser.add_option("--testsuite", dest="testsuite", help="Test to query", action="store")
   parser.add_option("--testgroup", dest="testgroup", help="Testgroup to query", action="store")
   parser.add_option("--os", dest="os", help="OS to query", action="store")
   parser.add_option("--buildtype", dest="buildtype", help="Buildtype to query", action="store")
+
+  # result size options
   parser.add_option("--all", dest="all", help="Retrieve all results", action="store_true") 
   parser.add_option("--size", dest="size", help="Size of query, overridden by --all", action="store", default=20)
+
+  # output options
   parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="json")
-  parser.add_option("--summarize", dest="summarize", help="Apply graph server summary algorithm", action="store_true")
   parser.add_option("--output", dest="output", help="File to dump output to", action="store")
-  parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(graph)", action="store", default="graph")
+  parser.add_option("--summarize", dest="summarize", help="Apply graph server summary algorithm", action="store_true")
+  parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(graph)",
+                    action="store", default="graph")
 
   (options, args) = parser.parse_args()
 
@@ -130,8 +138,8 @@ def cli():
     request.update({"to":options.to})
   if options.tree:
     request.update({"tree":options.tree})
-  if options.test:
-    request.update({"test":options.test})
+  if options.testsuite:
+    request.update({"testsuite":options.testsuite})
   if options.testgroup:
     request.update({"testgroup":options.testgroup})
   if options.os:
