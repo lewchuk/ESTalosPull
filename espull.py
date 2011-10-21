@@ -1,6 +1,6 @@
-import urllib2
 import optparse
 import pyes
+import json
 
 def get_median(data):
   """ Calculates the median on a list minus the maximum term """
@@ -85,6 +85,7 @@ def request_data(args):
 
   print "Data: %d/%d" % (len(data["hits"]["hits"]), data["hits"]["total"])
   
+
   if args.get("summarize",False):
     results = []
     for dp in data['hits']['hits']:
@@ -92,9 +93,24 @@ def request_data(args):
         result = parse_results(dp['_source'])
         if result:
           results.append(result)
-    print results
+    out_format = args.get("format", "json")
+    if out_format == "json":
+      result_string = json.dumps(results)
+    elif out_format == "csv":
+      s = []
+      s.append("revision,machine,starttime,result")
+      for d in results:
+        s.append("%(revision)s,%(machine)s,%(starttime)s,%(result)s" % d)
+      result_string =  '\n'.join(s)
   else:
     print data['hits']['hits']
+  
+  if "output" in args:
+    f = open(args.get("output"),'w')
+    f.write(result_string)
+    f.close()
+  else:
+    print result_string
 
 def cli():
   usage = "usage: %prog [options]"
@@ -111,7 +127,9 @@ def cli():
   parser.add_option("--buildtype", dest="buildtype", help="Buildtype to query", action="store")
   parser.add_option("--all", dest="all", help="Retrieve all results", action="store_true") 
   parser.add_option("--size", dest="size", help="Size of query, overridden by --all", action="store", default=20)
+  parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="json")
   parser.add_option("--summarize", dest="summarize", help="Apply graph server summary algorithm", action="store_true")
+  parser.add_option("--output", dest="output", help="File to dump output to", action="store")
 
   (options, args) = parser.parse_args()
 
@@ -119,6 +137,7 @@ def cli():
              "summarize":options.summarize,
              "all":options.all,
              "size":options.size,
+             "format":options.format,
              }
 
   if options.index:
@@ -137,6 +156,8 @@ def cli():
     request.update({"os":options.os})
   if options.buildtype:
     request.update({"buildtype":options.buildtype})
+  if options.output:
+    request.update({"output":options.output})
 
   request_data(request)
 
