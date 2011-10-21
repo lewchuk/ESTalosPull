@@ -2,35 +2,9 @@ import optparse
 import pyes
 import json
 
-def get_median(data):
-  """ Calculates the median on a list minus the maximum term """
-  d = sorted(data)[:-1]
-  if len(d) % 2 == 1:
-    return d[len(d)/2]
-  return (d[len(d)/2 -1] + d[len(d)/2])/2
+from analyser import GraphAnalyser
 
-def parse_ts(data):
-  """ Parses a ts data dictionary (can only have one key:value pair)"""
-
-  if len(data) != 1:
-    print "Multiple ts results, skipping"
-    return None
-  nums = [float(x) for x in data[data.keys()[0]].split(',')]
-  max_item = max(nums)
-  total = sum(nums)
-  return (total-max_item)/(len(nums)-1)
-
-def parse_tp(data):
-  """ Parsed a tp data dictionary """
-  medians = []
-  for key,value in data.items():
-    median = get_median([float(x) for x in value.split(',')])
-    medians.append(median) 
-  max_item = max(medians)
-  total = sum(medians)
-  return (total-max_item)/(len(medians)-1)
-
-def parse_results(data):
+def parse_results(data, analyser):
   """ Parses a testrun document """
   result = {}
   result['revision'] = data['revision']
@@ -42,9 +16,9 @@ def parse_results(data):
     print "no format, skipping"
     return None
   if data['format'] == 'ts_format':
-    result['result'] = parse_ts(test_data)
+    result['result'] = analyser.parse_ts(test_data)
   elif data['format'] == 'tp_format':
-    result['result'] = parse_tp(test_data)
+    result['result'] = analyser.parse_tp(test_data)
   else:
     return None
 
@@ -85,12 +59,18 @@ def request_data(args):
 
   print "Data: %d/%d" % (len(data["hits"]["hits"]), data["hits"]["total"])
   
+  analyser_name = args.get("analyser", "graph")
+  if analyser_name == "graph":
+    analyser = GraphAnalyser()
+  else:
+    print "Unrecognized analyser: %s" % analyser_name
+    return
 
   if args.get("summarize",False):
     results = []
     for dp in data['hits']['hits']:
       if dp['_type'] == 'testruns':
-        result = parse_results(dp['_source'])
+        result = parse_results(dp['_source'], analyser)
         if result:
           results.append(result)
     out_format = args.get("format", "json")
@@ -130,6 +110,7 @@ def cli():
   parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="json")
   parser.add_option("--summarize", dest="summarize", help="Apply graph server summary algorithm", action="store_true")
   parser.add_option("--output", dest="output", help="File to dump output to", action="store")
+  parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(graph)", action="store", default="graph")
 
   (options, args) = parser.parse_args()
 
@@ -138,6 +119,7 @@ def cli():
              "all":options.all,
              "size":options.size,
              "format":options.format,
+             "analyser":options.analyser,
              }
 
   if options.index:
