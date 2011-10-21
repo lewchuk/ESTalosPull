@@ -49,6 +49,10 @@ def request_data(args):
   if "buildtype" in args:
     query.add(pyes.filters.TermFilter("buildtype", args.get("buildtype")))
 
+  if "from" in args and "to" in args:
+    erange = pyes.utils.ESRange("date", from_value=args.get("from"), to_value=args.get("to"))
+    query.add(pyes.filters.RangeFilter(erange))
+
   size = args.get("size", 20)
   if args.get("all", False):
     data = conn.count(query)
