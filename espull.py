@@ -1,11 +1,19 @@
+import sys
+import os
 import optparse
 import pyes
 import json
 
 from analyser import *
+from formatter import *
 
 analysers = {
     'graph' : GraphAnalyser,
+}
+
+formatters = {
+    'json' : JsonFormatter,
+    'csv' : CSVFormatter,
 }
 
 basic_fields = ['revision', 'machine', 'starttime']
@@ -80,28 +88,27 @@ def request_data(args):
         if result:
           results.extend(result)
     out_format = args.get("format", "json")
-    if out_format == "json":
-      result_string = json.dumps(results)
-    elif out_format == "csv":
-      s = []
-      if spec_fields:
-        specs = "%(revision)s,%(machine)s,%(starttime)s,%(" + ")s,%(".join(spec_fields) + ")s,%(result)s"
-        s.append("revision,machine,starttime," + ",".join(spec_fields) + ",result")
-      else:
-        specs = "%(revision)s,%(machine)s,%(starttime)s,%(result)s"
-        s.append("revision,machine,starttime,result")
-      for d in results:
-        s.append(specs % d)
-      result_string =  '\n'.join(s)
+    formatter = formatters.get(out_format, None)
+    if formatter is None:
+      print "Unrecognized formatter: %s" % out_format
+      return
+
+    headers = []
+    headers.extend(basic_fields)
+    headers.extend(spec_fields)
+    headers.extend(analyser.get_headers())
+
+    if 'output' in args:
+      output = open(args.get('output'), 'w')
+    else:
+      output = os.fdopen(sys.stdout.fileno(), 'w')
+
+    formatter(headers=headers).output_records(results, output)
+
+    output.close()
+
   else:
     print data['hits']['hits']
-  
-  if "output" in args:
-    f = open(args.get("output"),'w')
-    f.write(result_string)
-    f.close()
-  else:
-    print result_string
 
 def cli():
   usage = "usage: %prog [options]"
