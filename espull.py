@@ -9,6 +9,7 @@ from formatter import *
 
 analysers = {
     'graph' : GraphAnalyser,
+    'comp' : ComponentAnalyser,
 }
 
 formatters = {
@@ -42,7 +43,7 @@ def request_data(args):
   conn = pyes.ES(args.get("es_server","localhost:9200"))
   if "index" in args:
     conn.open_index(args.get("index"))
-  
+
   query = pyes.query.ConstantScoreQuery()
 
   spec_fields = []
@@ -71,7 +72,7 @@ def request_data(args):
   data = conn.search(query=query, size=size)
 
   print "Data: %d/%d" % (len(data["hits"]["hits"]), data["hits"]["total"])
-  
+
   analyser_name = args.get("analyser", "graph")
   analyser = analysers.get(analyser_name, None)
   if analyser is None:
@@ -136,7 +137,7 @@ def cli():
   parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="json")
   parser.add_option("--output", dest="output", help="File to dump output to", action="store")
   parser.add_option("--dump", dest="dump", help="Dump raw ES results to stdout", action="store_true")
-  parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(graph)",
+  parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(graph, comp)",
                     action="store", default="graph")
   parser.add_option("--strip-spec-fields", dest="strip_fields", help="Remove fields constrained by a spec option from output",
                     action="store_true")
