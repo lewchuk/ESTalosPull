@@ -80,35 +80,36 @@ def request_data(args):
 
   analyser = analyser()
 
-  if args.get("summarize",False):
-    results = []
-    for dp in data['hits']['hits']:
-      if dp['_type'] == 'testruns':
-        result = parse_results(dp['_source'], analyser, spec_fields)
-        if result:
-          results.extend(result)
-    out_format = args.get("format", "json")
-    formatter = formatters.get(out_format, None)
-    if formatter is None:
-      print "Unrecognized formatter: %s" % out_format
-      return
+  if args.get("dump",False):
+    print data
+    return
 
-    headers = []
-    headers.extend(basic_fields)
-    headers.extend(spec_fields)
-    headers.extend(analyser.get_headers())
+  results = []
+  for dp in data['hits']['hits']:
+    if dp['_type'] == 'testruns':
+      result = parse_results(dp['_source'], analyser, spec_fields)
+      if result:
+        results.extend(result)
 
-    if 'output' in args:
-      output = open(args.get('output'), 'w')
-    else:
-      output = os.fdopen(sys.stdout.fileno(), 'w')
+  out_format = args.get("format", "json")
+  formatter = formatters.get(out_format, None)
+  if formatter is None:
+    print "Unrecognized formatter: %s" % out_format
+    return
 
-    formatter(headers=headers).output_records(results, output)
+  headers = []
+  headers.extend(basic_fields)
+  headers.extend(spec_fields)
+  headers.extend(analyser.get_headers())
 
-    output.close()
-
+  if 'output' in args:
+    output = open(args.get('output'), 'w')
   else:
-    print data['hits']['hits']
+    output = os.fdopen(sys.stdout.fileno(), 'w')
+
+  formatter(headers=headers).output_records(results, output)
+
+  output.close()
 
 def cli():
   usage = "usage: %prog [options]"
@@ -134,7 +135,7 @@ def cli():
   # output options
   parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="json")
   parser.add_option("--output", dest="output", help="File to dump output to", action="store")
-  parser.add_option("--summarize", dest="summarize", help="Apply graph server summary algorithm", action="store_true")
+  parser.add_option("--dump", dest="dump", help="Dump raw ES results to stdout", action="store_true")
   parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(graph)",
                     action="store", default="graph")
   parser.add_option("--strip-spec-fields", dest="strip_fields", help="Remove fields constrained by a spec option from output",
@@ -143,7 +144,7 @@ def cli():
   (options, args) = parser.parse_args()
 
   request = {"es_server":options.es_server,
-             "summarize":options.summarize,
+             "dump":options.dump,
              "all":options.all,
              "size":options.size,
              "format":options.format,
