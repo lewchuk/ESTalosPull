@@ -18,21 +18,30 @@ def get_average(data, strip_max=False):
   return total / size
 
 class GraphAnalyser(object):
-  def parse_ts(self, data):
+  def parse_ts(self, data, template):
     """ Parses a ts data dictionary (can only have one key:value pair)"""
 
     if len(data) != 1:
       print "Multiple ts results, skipping"
       return None
     nums = [float(x) for x in data[data.keys()[0]].split(',')]
-    return get_average(nums, True)
 
-  def parse_tp(self, data):
+    result = template.copy()
+    result['result'] = get_average(nums, True)
+    return [result]
+
+  def parse_tp(self, data, template):
     """ Parsed a tp data dictionary """
     medians = []
     for key,value in data.items():
       median = get_median([float(x) for x in value.split(',')])
       medians.append(median) 
-    return get_average(medians, True)
+
+    result = template.copy()
+    result['result'] = get_average(medians, True)
+    return [result]
+
+  def get_headers(self):
+    return ['result']
 
 

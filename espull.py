@@ -2,27 +2,33 @@ import optparse
 import pyes
 import json
 
-from analyser import GraphAnalyser
+from analyser import *
 
-def parse_results(data, analyser):
+analysers = {
+    'graph' : GraphAnalyser,
+}
+
+basic_fields = ['revision', 'machine', 'starttime']
+parametric_fields = ['testgroup', 'testsuite', 'os', 'buildtype', 'tree']
+
+def parse_results(data, analyser, spec_fields):
   """ Parses a testrun document """
-  result = {}
-  result['revision'] = data['revision']
-  result['machine'] = data['machine']
-  result['starttime'] = data['starttime']
+  template = {}
+  for field in basic_fields:
+    template[field] = data.get(field, None)
+  for field in spec_fields:
+    template[field] = data.get(field, None)
 
   test_data = data['testruns']
+  results = None
   if 'format' not in data:
     print "no format, skipping"
-    return None
-  if data['format'] == 'ts_format':
-    result['result'] = analyser.parse_ts(test_data)
+  elif data['format'] == 'ts_format':
+    results = analyser.parse_ts(test_data, template)
   elif data['format'] == 'tp_format':
-    result['result'] = analyser.parse_tp(test_data)
-  else:
-    return None
+    results = analyser.parse_tp(test_data, template)
 
-  return result
+  return results
 
 def request_data(args):
   conn = pyes.ES(args.get("es_server","localhost:9200"))
@@ -31,23 +37,18 @@ def request_data(args):
   
   query = pyes.query.ConstantScoreQuery()
 
-  if "tree" in args:
-    tree = args.get("tree")
-    if tree.startswith("mozilla-"):
-      tree = tree[tree.find('-')+1:]
-    query.add(pyes.filters.TermFilter("tree", tree))
+  spec_fields = []
+  strip_fields = args.get("strip_fields", False)
 
-  if "testsuite" in args:
-    query.add(pyes.filters.TermFilter("testsuite", args.get("testsuite")))
-
-  if "testgroup" in args:
-    query.add(pyes.filters.TermFilter("testgroup", args.get("testgroup")))
-
-  if "os" in args:
-    query.add(pyes.filters.TermFilter("os", args.get("os")))
-
-  if "buildtype" in args:
-    query.add(pyes.filters.TermFilter("buildtype", args.get("buildtype")))
+  for field in parametric_fields:
+    if field in args:
+      val = args.get(field)
+      for seg in val.split('-'):
+        query.add(pyes.filters.TermFilter(field, seg))
+      if not strip_fields:
+        spec_fields.append(field)
+    else:
+      spec_fields.append(field)
 
   if "from" in args and "to" in args:
     erange = pyes.utils.ESRange("date", from_value=args.get("from"), to_value=args.get("to"))
@@ -64,27 +65,33 @@ def request_data(args):
   print "Data: %d/%d" % (len(data["hits"]["hits"]), data["hits"]["total"])
   
   analyser_name = args.get("analyser", "graph")
-  if analyser_name == "graph":
-    analyser = GraphAnalyser()
-  else:
+  analyser = analysers.get(analyser_name, None)
+  if analyser is None:
     print "Unrecognized analyser: %s" % analyser_name
     return
+
+  analyser = analyser()
 
   if args.get("summarize",False):
     results = []
     for dp in data['hits']['hits']:
       if dp['_type'] == 'testruns':
-        result = parse_results(dp['_source'], analyser)
+        result = parse_results(dp['_source'], analyser, spec_fields)
         if result:
-          results.append(result)
+          results.extend(result)
     out_format = args.get("format", "json")
     if out_format == "json":
       result_string = json.dumps(results)
     elif out_format == "csv":
       s = []
-      s.append("revision,machine,starttime,result")
+      if spec_fields:
+        specs = "%(revision)s,%(machine)s,%(starttime)s,%(" + ")s,%(".join(spec_fields) + ")s,%(result)s"
+        s.append("revision,machine,starttime," + ",".join(spec_fields) + ",result")
+      else:
+        specs = "%(revision)s,%(machine)s,%(starttime)s,%(result)s"
+        s.append("revision,machine,starttime,result")
       for d in results:
-        s.append("%(revision)s,%(machine)s,%(starttime)s,%(result)s" % d)
+        s.append(specs % d)
       result_string =  '\n'.join(s)
   else:
     print data['hits']['hits']
@@ -123,6 +130,8 @@ def cli():
   parser.add_option("--summarize", dest="summarize", help="Apply graph server summary algorithm", action="store_true")
   parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(graph)",
                     action="store", default="graph")
+  parser.add_option("--strip-spec-fields", dest="strip_fields", help="Remove fields constrained by a spec option from output",
+                    action="store_true")
 
   (options, args) = parser.parse_args()
 
@@ -132,6 +141,7 @@ def cli():
              "size":options.size,
              "format":options.format,
              "analyser":options.analyser,
+             "strip_fields":options.strip_fields,
              }
 
   if options.index:
