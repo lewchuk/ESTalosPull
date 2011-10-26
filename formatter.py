@@ -18,8 +18,14 @@ class CSVFormatter(BaseFormatter):
     BaseFormatter.__init__(self, **kwargs)
     self.formatter = "%(" + ")s,%(".join(self.headers) + ")s\n"
 
+  def fill_record(self, record):
+    for header in self.headers:
+      if header not in record:
+        record[header] = "NA"
+
   def output_records(self, records, output):
     output.write("%s\n" % ','.join(self.headers))
     for record in records:
+      self.fill_record(record)
       output.write(self.formatter % record)
 
