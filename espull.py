@@ -52,9 +52,18 @@ def request_data(args):
   for field in parametric_fields:
     if field in args:
       val = args.get(field)
-      for seg in val.split('-'):
-        query.add(pyes.filters.TermFilter(field, seg))
-      if not strip_fields:
+
+      # allow OR specs
+      or_filters = []
+      for or_seg in val.split('|'):
+        and_filters = []
+        # hack to allow filtering on trees as ES tokenizes on -
+        for and_seg in or_seg.split('-'):
+          and_filters.append(pyes.filters.TermFilter(field, and_seg))
+        or_filters.append(pyes.filters.ANDFilter(and_filters))
+      query.add(pyes.filters.ORFilter(or_filters))
+
+      if not strip_fields or len(or_filters) > 1:
         spec_fields.append(field)
     else:
       spec_fields.append(field)
