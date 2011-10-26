@@ -58,6 +58,7 @@ class ComponentAnalyser(object):
       for num, run in enumerate(value.split(',')):
         result["test_%d" % num] = run
       self.max_tests = max(self.max_tests, num)
+      result['test_runs'] = num + 1
       results.append(result)
     return results
 
@@ -68,7 +69,7 @@ class ComponentAnalyser(object):
     return self.parse_data(data, template)
 
   def get_headers(self):
-    headers = ['test_name']
+    headers = ['test_name', 'test_runs']
     for i in range(self.max_tests+1):
       headers.append('test_%d' % i)
     return headers
