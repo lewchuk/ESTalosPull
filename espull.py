@@ -41,8 +41,6 @@ def parse_results(data, analyser, spec_fields):
 
 def request_data(args):
   conn = pyes.ES(args.get("es_server","localhost:9200"))
-  if "index" in args:
-    conn.open_index(args.get("index"))
 
   query = pyes.query.ConstantScoreQuery()
 
@@ -78,7 +76,7 @@ def request_data(args):
     size = data.get("count")
 
   print "Query: %s" % query.serialize()
-  data = conn.search(query=query, size=size)
+  data = conn.search(query=query, size=size, indexes=[args.get('index','talos')])
 
   print "Data: %d/%d" % (len(data["hits"]["hits"]), data["hits"]["total"])
 
@@ -127,7 +125,7 @@ def cli():
 
   # server spec options
   parser.add_option("--es-server", dest="es_server", help="ES Server to query", action="store", default="localhost:9200")
-  parser.add_option("--index", dest="index", help="Index to query (optional)", action="store")
+  parser.add_option("--index", dest="index", help="Index to query", action="store", default="talos")
 
   # query spec options
   parser.add_option("--from", dest="from_date", help="Start Date of query (also needs --to)", action="store")
@@ -139,11 +137,11 @@ def cli():
   parser.add_option("--buildtype", dest="buildtype", help="Buildtype to query", action="store")
 
   # result size options
-  parser.add_option("--all", dest="all", help="Retrieve all results", action="store_true") 
+  parser.add_option("--all", dest="all", help="Retrieve all results", action="store_true")
   parser.add_option("--size", dest="size", help="Size of query, overridden by --all", action="store", default=20)
 
   # output options
-  parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="json")
+  parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="csv")
   parser.add_option("--output", dest="output", help="File to dump output to", action="store")
   parser.add_option("--dump", dest="dump", help="Dump raw ES results to stdout", action="store_true")
   parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(graph, comp)",
@@ -160,10 +158,9 @@ def cli():
              "format":options.format,
              "analyser":options.analyser,
              "strip_fields":options.strip_fields,
+             "index":options.index,
              }
 
-  if options.index:
-    request.update({"index":options.index})
   if options.from_date:
     request.update({"from":options.from_date})
   if options.to:
