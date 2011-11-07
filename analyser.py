@@ -66,30 +66,44 @@ class TestSuite(object):
     else:
       return get_average([comp.get_median(strip_first=True) for comp in self.components.values()])
 
-class BuildAnalyser(object):
+class BaseAnalyser(object):
+  """ A base class for analysers which holds onto results """
+  def __init__(self):
+    self.results = []
+
+  def get_results(self):
+    return [result for result in self.results]
+
+  def flush_results(self):
+    self.results = []
+
+class BuildAnalyser(BaseAnalyser):
+  def __init__(self):
+    BaseAnalyser.__init__(self)
+
   def parse_data(self, data, template):
     result = template.copy()
     result['graph_result'] = data.old_average
     result['new_result'] = data.new_average
-    return [result]
+    self.results.append(result)
 
   def get_headers(self):
     return ['graph_result', 'new_result']
 
-class ComponentAnalyser(object):
+class ComponentAnalyser(BaseAnalyser):
   """ Returns a result for each component of a test """
 
   def __init__(self):
+    BaseAnalyser.__init__(self)
     self.max_tests = -1
     self.index = 1
 
   def parse_data(self, data, template):
-    results = []
     for name, comp in data.components.items():
       result = template.copy()
       result['test_name'] = name
       for num, run in enumerate(comp.values):
-        result["test_%d" % num] = run
+        result["test_%d" % num] = int(run)
       self.max_tests = max(self.max_tests, len(comp))
       result['max'] = comp.max
       result['min'] = comp.min
@@ -97,9 +111,8 @@ class ComponentAnalyser(object):
       result['new_median'] = comp.get_median(strip_first=True)
       result['test_runs'] = num + 1
       result['index'] = self.index
-      results.append(result)
+      self.results.append(result)
     self.index += 1
-    return results
 
   def get_headers(self):
     headers = ['index', 'test_name', 'test_runs', 'max', 'min', 'graph_median', 'new_median']
@@ -107,14 +120,14 @@ class ComponentAnalyser(object):
       headers.append('test_%d' % i)
     return headers
 
-class RunAnalyser(object):
+class RunAnalyser(BaseAnalyser):
   """ Returns a result for each run of every component of a test """
 
   def __init__(self):
+    BaseAnalyser.__init__(self)
     self.index = 1
 
   def parse_data(self, data, template):
-    results = []
     for name, comp in data.components.items():
       test_template = template.copy()
       test_template['index'] = self.index
@@ -123,9 +136,9 @@ class RunAnalyser(object):
       for pos, value in enumerate(comp.values):
         result = test_template.copy()
         result['run_num'] = pos
-        result['value'] = value
-        results.append(result)
-    return results
+        # cast to int so as not to give false impression of precision
+        result['value'] = int(value)
+        self.results.append(result)
 
   def get_headers(self):
     return ['index', 'test_name', 'run_num', 'value']

@@ -22,7 +22,7 @@ basic_fields = ['revision', 'machine', 'starttime']
 parametric_fields = ['testgroup', 'testsuite', 'os', 'buildtype', 'tree']
 
 def parse_results(data, analyser, spec_fields):
-  """ Parses a testrun document """
+  """ Parses a testrun document into the specified analyser"""
   template = {}
   for field in basic_fields:
     template[field] = data.get(field, None)
@@ -35,9 +35,7 @@ def parse_results(data, analyser, spec_fields):
     print "no format, skipping"
   else:
     data_obj = TestSuite(test_data, data['format'] == 'ts_format')
-    results = analyser.parse_data(data_obj, template)
-
-  return results
+    analyser.parse_data(data_obj, template)
 
 def request_data(args):
   address = args.get("es_server", "localhost:9200")
@@ -100,9 +98,7 @@ def request_data(args):
   results = []
   for dp in data['hits']['hits']:
     if dp['_type'] == 'testruns':
-      result = parse_results(dp['_source'], analyser, spec_fields)
-      if result:
-        results.extend(result)
+      parse_results(dp['_source'], analyser, spec_fields)
 
   out_format = args.get("format", "json")
   formatter = formatters.get(out_format, None)
@@ -120,9 +116,10 @@ def request_data(args):
   else:
     output = os.fdopen(sys.stdout.fileno(), 'w')
 
-  formatter(headers=headers).output_records(results, output)
+  formatter(headers=headers).output_records(analyser.get_results(), output)
 
   output.close()
+  analyser.flush_results()
 
 def cli():
   usage = "usage: %prog [options]"
