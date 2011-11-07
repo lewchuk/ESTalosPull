@@ -10,6 +10,7 @@ from formatter import *
 analysers = {
     'build' : BuildAnalyser,
     'comp' : ComponentAnalyser,
+    'run' : RunAnalyser,
 }
 
 formatters = {
@@ -132,8 +133,8 @@ def cli():
   parser.add_option("--index", dest="index", help="Index to query", action="store", default="talos")
 
   # query spec options
-  parser.add_option("--from", dest="from_date", help="Start Date of query (also needs --to)", action="store")
-  parser.add_option("--to", dest="to", help="End Date of query (also needs --from)", action="store")
+  parser.add_option("--from", dest="from_date", help="Start Date of query YYYY-MM-DD (also needs --to)", action="store")
+  parser.add_option("--to", dest="to", help="End Date of query YYYY-MM-DD (also needs --from)", action="store")
   parser.add_option("--tree", dest="tree", help="Tree to query", action="store")
   parser.add_option("--testsuite", dest="testsuite", help="Test to query", action="store")
   parser.add_option("--testgroup", dest="testgroup", help="Testgroup to query", action="store")
@@ -148,7 +149,7 @@ def cli():
   parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="csv")
   parser.add_option("--output", dest="output", help="File to dump output to", action="store")
   parser.add_option("--dump", dest="dump", help="Dump raw ES results to stdout", action="store_true")
-  parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(build, comp)",
+  parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(build, comp, run)",
                     action="store", default="build")
   parser.add_option("--strip-spec-fields", dest="strip_fields", help="Remove fields constrained by a spec option from output",
                     action="store_true")

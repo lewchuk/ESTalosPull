@@ -1,5 +1,5 @@
 
-__all__ = ['TestSuite', 'BuildAnalyser', 'ComponentAnalyser']
+__all__ = ['TestSuite', 'BuildAnalyser', 'ComponentAnalyser', 'RunAnalyser']
 
 def get_median(data, strip_max=False, strip_first=False):
   d = data
@@ -81,6 +81,7 @@ class ComponentAnalyser(object):
 
   def __init__(self):
     self.max_tests = -1
+    self.index = 1
 
   def parse_data(self, data, template):
     results = []
@@ -95,11 +96,37 @@ class ComponentAnalyser(object):
       result['graph_median'] = comp.get_median(strip_max=True)
       result['new_median'] = comp.get_median(strip_first=True)
       result['test_runs'] = num + 1
+      result['index'] = self.index
       results.append(result)
+    self.index += 1
     return results
 
   def get_headers(self):
-    headers = ['test_name', 'test_runs', 'max', 'min', 'graph_median', 'new_median']
-    for i in range(self.max_tests+1):
+    headers = ['index', 'test_name', 'test_runs', 'max', 'min', 'graph_median', 'new_median']
+    for i in range(self.max_tests):
       headers.append('test_%d' % i)
     return headers
+
+class RunAnalyser(object):
+  """ Returns a result for each run of every component of a test """
+
+  def __init__(self):
+    self.index = 1
+
+  def parse_data(self, data, template):
+    results = []
+    for name, comp in data.components.items():
+      test_template = template.copy()
+      test_template['index'] = self.index
+      self.index += 1
+      test_template['test_name'] = name
+      for pos, value in enumerate(comp.values):
+        result = test_template.copy()
+        result['run_num'] = pos
+        result['value'] = value
+        results.append(result)
+    return results
+
+  def get_headers(self):
+    return ['index', 'test_name', 'run_num', 'value']
+
