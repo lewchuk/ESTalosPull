@@ -8,7 +8,7 @@ from analyser import *
 from formatter import *
 
 analysers = {
-    'graph' : GraphAnalyser,
+    'build' : BuildAnalyser,
     'comp' : ComponentAnalyser,
 }
 
@@ -32,15 +32,16 @@ def parse_results(data, analyser, spec_fields):
   results = None
   if 'format' not in data:
     print "no format, skipping"
-  elif data['format'] == 'ts_format':
-    results = analyser.parse_ts(test_data, template)
-  elif data['format'] == 'tp_format':
-    results = analyser.parse_tp(test_data, template)
+  else:
+    data_obj = TestSuite(test_data, data['format'] == 'ts_format')
+    results = analyser.parse_data(data_obj, template)
 
   return results
 
 def request_data(args):
-  conn = pyes.ES(args.get("es_server","localhost:9200"))
+  address = args.get("es_server", "localhost:9200")
+  print "Connecting to: %s" % address
+  conn = pyes.ES(address)
 
   query = pyes.query.ConstantScoreQuery()
 
@@ -70,12 +71,15 @@ def request_data(args):
     erange = pyes.utils.ESRange("date", from_value=args.get("from"), to_value=args.get("to"))
     query.add(pyes.filters.RangeFilter(erange))
 
+  print "Query: %s" % query.serialize()
+
   size = args.get("size", 20)
   if args.get("all", False):
+    print "Retrieving count"
     data = conn.count(query)
     size = data.get("count")
 
-  print "Query: %s" % query.serialize()
+  print "Retrieving Data"
   data = conn.search(query=query, size=size, indexes=[args.get('index','talos')])
 
   print "Data: %d/%d" % (len(data["hits"]["hits"]), data["hits"]["total"])
@@ -144,8 +148,8 @@ def cli():
   parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="csv")
   parser.add_option("--output", dest="output", help="File to dump output to", action="store")
   parser.add_option("--dump", dest="dump", help="Dump raw ES results to stdout", action="store_true")
-  parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(graph, comp)",
-                    action="store", default="graph")
+  parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(build, comp)",
+                    action="store", default="build")
   parser.add_option("--strip-spec-fields", dest="strip_fields", help="Remove fields constrained by a spec option from output",
                     action="store_true")
 
