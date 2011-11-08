@@ -7,7 +7,7 @@ import json
 from analyser import *
 from formatter import *
 
-analysers = {
+analyser_classes = {
     'build' : BuildAnalyser,
     'comp' : ComponentAnalyser,
     'run' : RunAnalyser,
@@ -21,7 +21,7 @@ formatters = {
 basic_fields = ['revision', 'machine', 'starttime']
 parametric_fields = ['testgroup', 'testsuite', 'os', 'buildtype', 'tree']
 
-def parse_results(data, analyser, spec_fields):
+def parse_results(data, analysers, spec_fields):
   """ Parses a testrun document into the specified analyser"""
   template = {}
   for field in basic_fields:
@@ -35,7 +35,8 @@ def parse_results(data, analyser, spec_fields):
     print "no format, skipping"
   else:
     data_obj = TestSuite(test_data, data['format'] == 'ts_format')
-    analyser.parse_data(data_obj, template)
+    for analyser in analysers:
+      analyser.parse_data(data_obj, template)
 
 def request_data(args):
   address = args.get("es_server", "localhost:9200")
@@ -83,13 +84,18 @@ def request_data(args):
 
   print "Data: %d/%d" % (len(data["hits"]["hits"]), data["hits"]["total"])
 
-  analyser_name = args.get("analyser", "graph")
-  analyser = analysers.get(analyser_name, None)
-  if analyser is None:
-    print "Unrecognized analyser: %s" % analyser_name
-    return
+  analyser_names = args.get("analysers", ["build"])
+  analysers = []
+  for name in analyser_names:
+    a_class = analyser_classes.get(name, None)
+    if a_class is None:
+      print "Unrecognized analyser: %s" % name
+      continue
+    analysers.append(a_class())
 
-  analyser = analyser()
+  if not analysers:
+    print "No recognized analyser"
+    return
 
   if args.get("dump",False):
     print data
@@ -98,7 +104,7 @@ def request_data(args):
   results = []
   for dp in data['hits']['hits']:
     if dp['_type'] == 'testruns':
-      parse_results(dp['_source'], analyser, spec_fields)
+      parse_results(dp['_source'], analysers, spec_fields)
 
   out_format = args.get("format", "json")
   formatter = formatters.get(out_format, None)
@@ -106,20 +112,25 @@ def request_data(args):
     print "Unrecognized formatter: %s" % out_format
     return
 
-  headers = []
-  headers.extend(basic_fields)
-  headers.extend(spec_fields)
-  headers.extend(analyser.get_headers())
+  for analyser in analysers:
+    headers = []
+    headers.extend(basic_fields)
+    headers.extend(spec_fields)
+    headers.extend(analyser.get_headers())
 
-  if 'output' in args:
-    output = open(args.get('output'), 'w')
-  else:
-    output = os.fdopen(sys.stdout.fileno(), 'w')
+    a_formatter = formatter(headers=headers)
+    if 'output' in args:
+      output_prefix = args.get('output')
+      output_file = args.get('output') + "_" + analyser.get_suffix() + a_formatter.get_suffix()
+      output = open(output_file, 'w')
+    else:
+      output = sys.stdout
 
-  formatter(headers=headers).output_records(analyser.get_results(), output)
+    a_formatter.output_records(analyser.get_results(), output)
 
-  output.close()
-  analyser.flush_results()
+    if 'output' in args:
+      output.close()
+    analyser.flush_results()
 
 def cli():
   usage = "usage: %prog [options]"
@@ -144,10 +155,10 @@ def cli():
 
   # output options
   parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="csv")
-  parser.add_option("--output", dest="output", help="File to dump output to", action="store")
+  parser.add_option("--output", dest="output", help="File prefix to dump output to", action="store")
   parser.add_option("--dump", dest="dump", help="Dump raw ES results to stdout", action="store_true")
-  parser.add_option("--analyser", dest="analyser", help="Analyser to use for summarization, options=(build, comp, run)",
-                    action="store", default="build")
+  parser.add_option("--analyser", dest="analysers", help="Analyser to use for summarization (can specify multiple), options=(build, comp, run)",
+                    action="append")
   parser.add_option("--strip-spec-fields", dest="strip_fields", help="Remove fields constrained by a spec option from output",
                     action="store_true")
 
@@ -158,7 +169,7 @@ def cli():
              "all":options.all,
              "size":options.size,
              "format":options.format,
-             "analyser":options.analyser,
+             "analysers":options.analysers or ['build'],
              "strip_fields":options.strip_fields,
              "index":options.index,
              }

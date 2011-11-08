@@ -90,6 +90,9 @@ class BuildAnalyser(BaseAnalyser):
   def get_headers(self):
     return ['graph_result', 'new_result']
 
+  def get_suffix(self):
+    return "builds"
+
 class ComponentAnalyser(BaseAnalyser):
   """ Returns a result for each component of a test """
 
@@ -120,6 +123,9 @@ class ComponentAnalyser(BaseAnalyser):
       headers.append('test_%d' % i)
     return headers
 
+  def get_suffix(self):
+    return "components"
+
 class RunAnalyser(BaseAnalyser):
   """ Returns a result for each run of every component of a test """
 
@@ -142,4 +148,7 @@ class RunAnalyser(BaseAnalyser):
 
   def get_headers(self):
     return ['index', 'test_name', 'run_num', 'value']
+
+  def get_suffix(self):
+    return "runs"
 
