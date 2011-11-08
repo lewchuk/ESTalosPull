@@ -13,15 +13,20 @@ if [ ! -z $2 ]; then
 fi
 
 testsuites=("tdhtml" "tdhtml" "tp5" "tsspider" "tsspider" "tsvg")
-testgroups=("chrome|chrome_mac" "nochrome" "" "chrome|chrome_mac" "nochrome" "")
+testgroups=("chrome" "nochrome" "" "chrome" "nochrome" "")
+extra_testgroup=("chrome_mac" "" "" "chrome_mac" "" "")
 
-for i in {0..7}; do
+for i in {0..5}; do
   ts=${testsuites[$i]}
   tg=${testgroups[$i]}
+  tg_e=${extra_testgroup[$i]}
   output="$ts"
   params=""
   if [ ! -z $tg ]; then
     output="$ts-$tg"
+    if [ ! -z $tg_e ]; then
+      tg="$tg|$tg_e"
+    fi
     params="--testgroup=$tg"
   fi
   echo $ts $tg $1/$output
