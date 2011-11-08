@@ -4,7 +4,7 @@ if [ -z $1 ]; then
   exit
 fi
 mkdir $1
-common="--es-server=elasticsearch1.metrics.sjc1.mozilla.com:9200 --all --analyser=comp"
+common="--es-server=elasticsearch1.metrics.sjc1.mozilla.com:9200 --all --analyser=comp --analyser=build --analyser=run"
 dates=""
 if [ ! -z $2 ]; then
   if [ ! -z $3 ]; then
@@ -12,19 +12,20 @@ if [ ! -z $2 ]; then
   fi
 fi
 
-testsuites=("tdhtml" "tdhtml" "ts" "tp5" "tsspider" "tsspider" "tsvg" "ts_paint")
-testgroups=("chrome|chrome_mac" "nochrome" "" "" "chrome|chrome_mac" "nochrome" "" "paint")
+testsuites=("tdhtml" "tdhtml" "tp5" "tsspider" "tsspider" "tsvg")
+testgroups=("chrome|chrome_mac" "nochrome" "" "chrome|chrome_mac" "nochrome" "")
 
 for i in {0..7}; do
   ts=${testsuites[$i]}
   tg=${testgroups[$i]}
-  output="$1/$ts.csv"
+  output="$ts"
   params=""
   if [ ! -z $tg ]; then
-    output="$1/$ts-$tg.csv"
+    output="$ts-$tg"
     params="--testgroup=$tg"
   fi
-  echo $ts $tg $output
-  python espull.py $common $dates $params --testsuite=$ts --output=$output
+  echo $ts $tg $1/$output
+  mkdir $1/$output
+  python espull.py $common $dates $params --testsuite=$ts --output=$1/$output/$output
 done;
 
