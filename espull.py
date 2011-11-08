@@ -101,10 +101,13 @@ def request_data(args):
     print data
     return
 
-  results = []
+  errors = []
   for dp in data['hits']['hits']:
     if dp['_type'] == 'testruns':
-      parse_results(dp['_source'], analysers, spec_fields)
+      if dp['_source']['failure'] is None:
+        parse_results(dp['_source'], analysers, spec_fields)
+      else:
+        errors.append(dp)
 
   out_format = args.get("format", "json")
   formatter = formatters.get(out_format, None)
@@ -120,7 +123,6 @@ def request_data(args):
 
     a_formatter = formatter(headers=headers)
     if 'output' in args:
-      output_prefix = args.get('output')
       output_file = args.get('output') + "_" + analyser.get_suffix() + a_formatter.get_suffix()
       output = open(output_file, 'w')
     else:
@@ -131,6 +133,16 @@ def request_data(args):
     if 'output' in args:
       output.close()
     analyser.flush_results()
+
+  if errors:
+    if 'output' in args:
+      output_file = args.get('output') + "_errors.json"
+      output = open(output_file, 'w')
+      output.write("%s\n" % json.dumps(errors))
+      output.close()
+    else:
+      print "Errors:"
+      print errors
 
 def cli():
   usage = "usage: %prog [options]"
