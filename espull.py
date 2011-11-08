@@ -104,7 +104,7 @@ def request_data(args):
   errors = []
   for dp in data['hits']['hits']:
     if dp['_type'] == 'testruns':
-      if dp['_source']['failure'] is None:
+      if dp['_source']['testruns']:
         parse_results(dp['_source'], analysers, spec_fields)
       else:
         errors.append(dp)
