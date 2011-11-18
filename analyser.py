@@ -1,3 +1,4 @@
+import math
 
 __all__ = ['TestSuite', 'BuildAnalyser', 'ComponentAnalyser', 'RunAnalyser']
 
@@ -12,13 +13,19 @@ def get_median(data, strip_max=False, strip_first=False):
     return d[len(d)/2]
   return (d[len(d)/2 - 1] + d[len(d)/2])/2
 
-def get_average(data, strip_max=False):
-  total = sum(data)
-  size = len(data)
+def get_average(data, strip_max=False, strip_first=False):
+  d = data
+  if strip_first:
+    d = data[1:]
+  d = sorted(d)
   if strip_max:
-    total -= max(data)
-    size -= 1
-  return total / size
+    d = d[:-1]
+  total = sum(d)
+  size = len(d)
+  avg = total/size
+  diffs = [pow((x - avg),2) for x in d]
+  std_dev = math.sqrt(sum(diffs)/size)
+  return (avg, std_dev)
 
 class TestComponent(object):
   def __init__(self, values):
@@ -55,7 +62,8 @@ class TestSuite(object):
       comp = self.components.values()[0]
       return comp.get_average(strip_max=True)
     else:
-      return get_average([comp.get_median(strip_max=True) for comp in self.components.values()], True)
+      d = [comp.get_median(strip_max=True) for comp in self.components.values()]
+      return get_average(d, True)
 
   @property
   def new_average(self):
@@ -64,7 +72,8 @@ class TestSuite(object):
       comp = self.components.values()[0]
       return comp.get_average()
     else:
-      return get_average([comp.get_median(strip_first=True) for comp in self.components.values()])
+      d = [comp.get_median(strip_first=True) for comp in self.components.values()]
+      return get_average(d)
 
 class BaseAnalyser(object):
   """ A base class for analysers which holds onto results """
@@ -83,12 +92,12 @@ class BuildAnalyser(BaseAnalyser):
 
   def parse_data(self, data, template):
     result = template.copy()
-    result['graph_result'] = data.old_average
-    result['new_result'] = data.new_average
+    (result['graph_result'], result['graph_std']) = data.old_average
+    (result['new_result'], result['new_std']) = data.new_average
     self.results.append(result)
 
   def get_headers(self):
-    return ['graph_result', 'new_result']
+    return ['graph_result', 'new_result', 'graph_std', 'new_std']
 
   def get_suffix(self):
     return "builds"
@@ -112,13 +121,16 @@ class ComponentAnalyser(BaseAnalyser):
       result['min'] = comp.min
       result['graph_median'] = comp.get_median(strip_max=True)
       result['new_median'] = comp.get_median(strip_first=True)
+      (avg, std_dev) = comp.get_average(strip_first=True)
+      result['new_average'] = avg
+      result['new_std_dev'] = std_dev
       result['test_runs'] = num + 1
       result['index'] = self.index
       self.results.append(result)
     self.index += 1
 
   def get_headers(self):
-    headers = ['index', 'test_name', 'test_runs', 'max', 'min', 'graph_median', 'new_median']
+    headers = ['index', 'test_name', 'test_runs', 'max', 'min', 'graph_median', 'new_median', 'new_average', 'new_std_dev']
     for i in range(self.max_tests):
       headers.append('test_%d' % i)
     return headers
