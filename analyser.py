@@ -1,6 +1,11 @@
 import math
+import urllib2
+import re
+import StringIO
+from gzip import GzipFile
+from logparser import CorruptParser
 
-__all__ = ['TestSuite', 'BuildAnalyser', 'ComponentAnalyser', 'RunAnalyser']
+__all__ = ['TestSuite', 'BuildAnalyser', 'ComponentAnalyser', 'RunAnalyser', 'CorruptAnalyser']
 
 def get_median(data, strip_max=False, strip_first=False):
   d = data
@@ -79,6 +84,9 @@ class BaseAnalyser(object):
   """ A base class for analysers which holds onto results """
   def __init__(self):
     self.results = []
+    self.headers = []
+    self.suffix = "NA"
+    self.types = ["testruns"]
 
   def get_results(self):
     return [result for result in self.results]
@@ -86,21 +94,26 @@ class BaseAnalyser(object):
   def flush_results(self):
     self.results = []
 
+  def get_headers(self):
+    return self.headers
+
+  def get_suffix(self):
+    return self.suffix
+
+  def types_parsed(self):
+    return self.types
+
 class BuildAnalyser(BaseAnalyser):
   def __init__(self):
     BaseAnalyser.__init__(self)
+    self.headers = ['graph_result', 'new_result', 'graph_std', 'new_std']
+    self.suffix = "builds"
 
   def parse_data(self, data, template):
     result = template.copy()
     (result['graph_result'], result['graph_std']) = data.old_average
     (result['new_result'], result['new_std']) = data.new_average
     self.results.append(result)
-
-  def get_headers(self):
-    return ['graph_result', 'new_result', 'graph_std', 'new_std']
-
-  def get_suffix(self):
-    return "builds"
 
 class ComponentAnalyser(BaseAnalyser):
   """ Returns a result for each component of a test """
@@ -109,6 +122,8 @@ class ComponentAnalyser(BaseAnalyser):
     BaseAnalyser.__init__(self)
     self.max_tests = -1
     self.index = 1
+    self.headers = ['index', 'test_name', 'test_runs', 'max', 'min', 'graph_median', 'new_median', 'new_average', 'new_std_dev']
+    self.suffix = "components"
 
   def parse_data(self, data, template):
     for name, comp in data.components.items():
@@ -130,13 +145,10 @@ class ComponentAnalyser(BaseAnalyser):
     self.index += 1
 
   def get_headers(self):
-    headers = ['index', 'test_name', 'test_runs', 'max', 'min', 'graph_median', 'new_median', 'new_average', 'new_std_dev']
+    headers = BaseAnalyser.get_headers(self)
     for i in range(self.max_tests):
       headers.append('test_%d' % i)
     return headers
-
-  def get_suffix(self):
-    return "components"
 
 class RunAnalyser(BaseAnalyser):
   """ Returns a result for each run of every component of a test """
@@ -144,6 +156,8 @@ class RunAnalyser(BaseAnalyser):
   def __init__(self):
     BaseAnalyser.__init__(self)
     self.index = 1
+    self.headers = ['index', 'test_name', 'run_num', 'value']
+    self.suffix = "runs"
 
   def parse_data(self, data, template):
     for name, comp in data.components.items():
@@ -158,9 +172,33 @@ class RunAnalyser(BaseAnalyser):
         result['value'] = int(value)
         self.results.append(result)
 
-  def get_headers(self):
-    return ['index', 'test_name', 'run_num', 'value']
+class CorruptAnalyser(BaseAnalyser):
+  """ Downloads full logs and searches for Corrupt JPEG messages """
 
-  def get_suffix(self):
-    return "runs"
+  def __init__(self):
+    BaseAnalyser.__init__(self)
+    self.headers = ['test_name', 'run_num']
+    self.suffix = "corrupted"
+    self.types = self.types = ["builds"]
+
+  def parse_data(self, data, template):
+    url = data['logurl']
+    conn = urllib2.urlopen(url)
+    raw_data = conn.read()
+    data = StringIO.StringIO(raw_data)
+    data_file = GzipFile(fileobj=data)
+    parser = CorruptParser()
+    (entries, _) = parser.parse(data_file)
+    for (testsuite, cycle, page) in entries:
+      urlRe = re.compile("^http://localhost/page_load_test/%s/(.*?)$" % testsuite)
+      m = urlRe.match(page)
+      if not m:
+        print "unmatched url: %s" % page
+        continue
+      result = template.copy()
+      result['test_name'] = m.group(1)
+      result['run_num'] = int(cycle) - 1
+      result['testsuite'] = testsuite
+      self.results.append(result)
+
 

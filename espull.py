@@ -11,6 +11,7 @@ analyser_classes = {
     'build' : BuildAnalyser,
     'comp' : ComponentAnalyser,
     'run' : RunAnalyser,
+    'corrupt' : CorruptAnalyser,
 }
 
 formatters = {
@@ -21,7 +22,7 @@ formatters = {
 basic_fields = ['revision', 'machine', 'starttime']
 parametric_fields = ['testgroup', 'testsuite', 'os', 'buildtype', 'tree']
 
-def parse_results(data, analysers, spec_fields):
+def parse_results(data, analysers, spec_fields, log_type):
   """ Parses a testrun document into the specified analyser"""
   template = {}
   for field in basic_fields:
@@ -29,13 +30,17 @@ def parse_results(data, analysers, spec_fields):
   for field in spec_fields:
     template[field] = data.get(field, None)
 
-  test_data = data['testruns']
   results = None
-  if 'format' not in data:
+  if log_type == "testruns" and 'format' not in data:
     print "no format, skipping"
-  else:
-    data_obj = TestSuite(test_data, data['format'] == 'ts_format')
-    for analyser in analysers:
+    return
+
+  data_obj = data
+  if log_type == "testruns":
+    data_obj = TestSuite(data['testruns'], data['format'] == 'ts_format')
+
+  for analyser in analysers:
+    if log_type in analyser.types_parsed():
       analyser.parse_data(data_obj, template)
 
 def request_data(args):
@@ -102,12 +107,16 @@ def request_data(args):
     return
 
   errors = []
+  types = set()
+  for a in analysers:
+    types.update(a.types_parsed())
   for dp in data['hits']['hits']:
-    if dp['_type'] == 'testruns':
-      if dp['_source']['testruns']:
-        parse_results(dp['_source'], analysers, spec_fields)
-      else:
+    log_type = dp['_type']
+    if log_type in types:
+      if log_type == "testruns" and not dp['_source']['testruns']:
         errors.append(dp)
+      else:
+        parse_results(dp['_source'], analysers, spec_fields, log_type)
 
   out_format = args.get("format", "json")
   formatter = formatters.get(out_format, None)
