@@ -3,7 +3,9 @@ if [ -z $1 ]; then
   echo "No output folder"
   exit
 fi
-mkdir $1
+if [ ! -d $1 ]; then
+  mkdir $1
+fi
 common="--es-server=elasticsearch1.metrics.sjc1.mozilla.com:9200 --all --analyser=comp --analyser=build --analyser=run"
 dates=""
 if [ ! -z $2 ]; then
@@ -30,7 +32,9 @@ for i in {0..5}; do
     params="--testgroup=$tg"
   fi
   echo $ts $tg $1/$output
-  mkdir $1/$output
+  if [ ! -d $1/$output ]; then
+    mkdir $1/$output
+  fi
   python espull.py $common $dates $params --testsuite=$ts --output=$1/$output/$output
 done;
 
