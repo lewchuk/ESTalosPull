@@ -43,11 +43,7 @@ def parse_results(data, analysers, spec_fields, log_type):
     if log_type in analyser.types_parsed():
       analyser.parse_data(data_obj, template)
 
-def request_data(args):
-  address = args.get("es_server", "localhost:9200")
-  print "Connecting to: %s" % address
-  conn = pyes.ES(address)
-
+def generate_query(args):
   query = pyes.query.ConstantScoreQuery()
 
   spec_fields = []
@@ -78,17 +74,9 @@ def request_data(args):
 
   print "Query: %s" % query.serialize()
 
-  size = args.get("size", 20)
-  if args.get("all", False):
-    print "Retrieving count"
-    data = conn.count(query)
-    size = data.get("count")
+  return (query, spec_fields)
 
-  print "Retrieving Data"
-  data = conn.search(query=query, size=size, indexes=[args.get('index','talos')])
-
-  print "Data: %d/%d" % (len(data["hits"]["hits"]), data["hits"]["total"])
-
+def build_analysers(spec_fields, args):
   analyser_names = args.get("analysers", ["build"])
   analysers = []
   for name in analyser_names:
@@ -106,24 +94,13 @@ def request_data(args):
     print data
     return
 
-  errors = []
-  types = set()
-  for a in analysers:
-    types.update(a.types_parsed())
-  for dp in data['hits']['hits']:
-    log_type = dp['_type']
-    if log_type in types:
-      if log_type == "testruns" and not dp['_source']['testruns']:
-        errors.append(dp)
-      else:
-        parse_results(dp['_source'], analysers, spec_fields, log_type)
-
   out_format = args.get("format", "json")
   formatter = formatters.get(out_format, None)
   if formatter is None:
     print "Unrecognized formatter: %s" % out_format
     return
 
+  outputters = []
   for analyser in analysers:
     headers = []
     headers.extend(basic_fields)
@@ -132,16 +109,73 @@ def request_data(args):
 
     a_formatter = formatter(headers=headers)
     if 'output' in args:
-      output_file = args.get('output') + "_" + analyser.get_suffix() + a_formatter.get_suffix()
-      output = open(output_file, 'w')
+      outputters.append(FileOutput(args.get('output'), analyser, a_formatter))
     else:
-      output = sys.stdout
+      outputters.append(BaseOutput(analyser, a_formatter))
 
-    a_formatter.output_records(analyser.get_results(), output)
+    outputters[-1].output_header()
 
-    if 'output' in args:
-      output.close()
-    analyser.flush_results()
+  return outputters
+
+def retrieve_data(conn, query, from_i, size, args):
+  print "Retrieving Data %s - %s" % (from_i, from_i + size)
+  kwargs = {'query' : query,
+            'size' : size,
+            'from' : from_i,
+            'indexes' : [args.get('index','talos')]
+           }
+  data = conn.search(**kwargs)
+  print "Data: %d/%d" % (len(data["hits"]["hits"])+from_i, data["hits"]["total"])
+
+  return data
+
+def analyse_data(data, outputters, spec_fields, args):
+  analysers = [o.analyser for o in outputters]
+
+  types = set()
+  for a in analysers:
+    types.update(a.types_parsed())
+
+  errors = []
+
+  data_iter = iter(data['hits']['hits'])
+  total_data = len(data['hits']['hits'])
+  for dp in data['hits']['hits']:
+    log_type = dp['_type']
+    if log_type in types:
+      if log_type == "testruns" and not dp['_source']['testruns']:
+        errors.append(dp)
+      else:
+        parse_results(dp['_source'], analysers, spec_fields, log_type)
+
+  for outputter in outputters:
+    outputter.output_records()
+
+  return errors
+
+def request_data(args):
+  (query, spec_fields) = generate_query(args)
+  outputters = build_analysers(spec_fields, args)
+
+  address = args.get("es_server", "localhost:9200")
+  print "Connecting to: %s" % address
+  conn = pyes.ES(address)
+
+  size = args.get("size", 20)
+  if args.get("all", False):
+    print "Retrieving count"
+    data = conn.count(query)
+    size = data.get("count")
+
+  batch = min(args.get("batch", 1000), size)
+
+  splits = range(0, size, batch)
+
+  errors = []
+  for s in splits:
+    data = retrieve_data(conn, query, s, batch, args)
+    e = analyse_data(data, outputters, spec_fields, args)
+    errors.extend(e)
 
   if errors:
     if 'output' in args:
@@ -152,6 +186,8 @@ def request_data(args):
     else:
       print "Errors:"
       print errors
+
+
 
 def cli():
   usage = "usage: %prog [options]"
@@ -173,6 +209,7 @@ def cli():
   # result size options
   parser.add_option("--all", dest="all", help="Retrieve all results", action="store_true")
   parser.add_option("--size", dest="size", help="Size of query, overridden by --all", action="store", default=20)
+  parser.add_option("--batch", dest="batch", help="Size of batch to analyse", action="store", default=1000)
 
   # output options
   parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="csv")
@@ -188,11 +225,12 @@ def cli():
   request = {"es_server":options.es_server,
              "dump":options.dump,
              "all":options.all,
-             "size":options.size,
+             "size":int(options.size),
              "format":options.format,
              "analysers":options.analysers or ['build'],
              "strip_fields":options.strip_fields,
              "index":options.index,
+             "batch":int(options.batch),
              }
 
   if options.from_date:
