@@ -36,7 +36,7 @@
 
 import sys
 import os
-import optparse
+import argparse
 import pyes
 import json
 
@@ -226,47 +226,57 @@ def request_data(args):
 
 
 def cli():
-  usage = "usage: %prog [options]"
-  parser = optparse.OptionParser(usage=usage)
+  parser = argparse.ArgumentParser(description="Script to pull a filtered set of talos logs down from ElasticSearch.  The set of log summaries can be filtered by a variety of dimensions.  Once downloaded the summaries are analysed, formatted and stored in the specified location.")
 
+  server_options = parser.add_argument_group('Server Specification')
   # server spec options
-  parser.add_option("--es-server", dest="es_server", help="ES Server to query", action="store", default="localhost:9200")
-  parser.add_option("--index", dest="index", help="Index to query", action="store", default="talos")
+  server_options.add_argument("--es-server", dest="es_server", help="ES Server to query", default="localhost:9200")
+  server_options.add_argument("--index", help="Index to query", default="talos")
 
   # query spec options
-  parser.add_option("--from", dest="from_date", help="Start Date of query YYYY-MM-DD (also needs --to)", action="store")
-  parser.add_option("--to", dest="to", help="End Date of query YYYY-MM-DD (also needs --from)", action="store")
-  parser.add_option("--tree", dest="tree", help="Tree to query", action="store")
-  parser.add_option("--testsuite", dest="testsuite", help="Test to query", action="store")
-  parser.add_option("--testgroup", dest="testgroup", help="Testgroup to query", action="store")
-  parser.add_option("--os", dest="os", help="OS to query", action="store")
-  parser.add_option("--buildtype", dest="buildtype", help="Buildtype to query", action="store")
+  filter_options = parser.add_argument_group('Filter Specification')
+  filter_options.add_argument("--from", dest="from_date",
+                              help="Start Date of query YYYY-MM-DD (also needs --to)")
+  filter_options.add_argument("--to", help="End Date of query YYYY-MM-DD (also needs --from)")
+  filter_options.add_argument("--tree", help="Tree to query")
+  filter_options.add_argument("--testsuite", help="Test to query")
+  filter_options.add_argument("--testgroup", help="Testgroup to query")
+  filter_options.add_argument("--os", help="OS to query")
+  filter_options.add_argument("--buildtype", help="Buildtype to query")
 
   # result size options
-  parser.add_option("--all", dest="all", help="Retrieve all results", action="store_true")
-  parser.add_option("--size", dest="size", help="Size of query, overridden by --all", action="store", default=20)
-  parser.add_option("--batch", dest="batch", help="Size of batch to analyse", action="store", default=1000)
+  retrieval_options = parser.add_argument_group('Retrieval Options')
+  retrieval_options.add_argument("--all", help="Retrieve all results", action="store_true")
+  retrieval_options.add_argument("--size", help="Size of query, overridden by --all",
+                                 default=20, type=int)
+  retrieval_options.add_argument("--batch", help="Maximum size of batch to download and analyse",
+                                 default=1000, type=int)
 
   # output options
-  parser.add_option("--format", dest="format", help="Output format (json, csv)", action="store", default="csv")
-  parser.add_option("--output", dest="output", help="File prefix to dump output to", action="store")
-  parser.add_option("--dump", dest="dump", help="Dump raw ES results to stdout", action="store_true")
-  parser.add_option("--analyser", dest="analysers", help="Analyser to use for summarization (can specify multiple), options=(build, comp, run)",
-                    action="append")
-  parser.add_option("--strip-spec-fields", dest="strip_fields", help="Remove fields constrained by a spec option from output",
-                    action="store_true")
+  output_options = parser.add_argument_group('Output Options')
+  output_options.add_argument("--format", help="Output format", choices=formatters.keys(),
+                              default="csv")
+  output_options.add_argument("--output", help="File prefix to dump output to")
+  output_options.add_argument("--dump", help="Dump raw ES results to stdout",
+                              action="store_true")
+  output_options.add_argument("--analyser", dest="analysers",
+                              help="Analyser to use for summarization (can specify multiple)",
+                              choices=analyser_classes.keys(), action="append")
+  output_options.add_argument("--strip-spec-fields", dest="strip_fields",
+                              help="Remove fields constrained by a spec option from output",
+                              action="store_true")
 
-  (options, args) = parser.parse_args()
+  options = parser.parse_args()
 
   request = {"es_server":options.es_server,
              "dump":options.dump,
              "all":options.all,
-             "size":int(options.size),
+             "size":options.size,
              "format":options.format,
              "analysers":options.analysers or ['build'],
              "strip_fields":options.strip_fields,
              "index":options.index,
-             "batch":int(options.batch),
+             "batch":options.batch,
              }
 
   if options.from_date:
