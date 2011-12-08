@@ -48,6 +48,7 @@ analyser_classes = {
     'comp' : ComponentAnalyser,
     'run' : RunAnalyser,
     'corrupt' : CorruptAnalyser,
+    'run_diff' : RunDifferenceAnalyser,
 }
 
 formatters = {

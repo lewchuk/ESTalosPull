@@ -41,7 +41,8 @@ import StringIO
 from gzip import GzipFile
 from logparser import CorruptParser
 
-__all__ = ['TestSuite', 'BuildAnalyser', 'ComponentAnalyser', 'RunAnalyser', 'CorruptAnalyser']
+__all__ = ['TestSuite', 'BuildAnalyser', 'ComponentAnalyser', 'RunAnalyser', 'CorruptAnalyser',
+           'RunDifferenceAnalyser']
 
 def get_median(data, strip_max=False, strip_first=False):
   d = data
@@ -198,6 +199,28 @@ class RunAnalyser(BaseAnalyser):
         result['run_num'] = pos
         # cast to int so as not to give false impression of precision
         result['value'] = int(value)
+        self.results.append(result)
+
+class RunDifferenceAnalyser(RunAnalyser):
+  """ Returns a result for the difference in run value from the previous """
+
+  def __init__(self):
+    RunAnalyser.__init__(self)
+    self.suffix = "run_diffs"
+
+  def parse_data(self, data, template):
+    for name, comp in data.components.items():
+      test_template = template.copy()
+      test_template['index'] = self.index
+      self.index += 1
+      test_template['test_name'] = name
+      last_value = 0
+      for pos, value in enumerate(comp.values):
+        result = test_template.copy()
+        result['run_num'] = pos
+        # cast to int so as not to give false impression of precision
+        result['value'] = int(value) - last_value
+        last_value = int(value)
         self.results.append(result)
 
 class CorruptAnalyser(BaseAnalyser):
