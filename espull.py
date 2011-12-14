@@ -56,15 +56,12 @@ formatters = {
     'csv' : CSVFormatter,
 }
 
-basic_fields = ['revision', 'machine', 'starttime']
-parametric_fields = ['testgroup', 'testsuite', 'os', 'buildtype', 'tree']
+parametric_fields = ['revision', 'machine', 'starttime', 'testgroup', 'testsuite', 'os', 'buildtype', 'tree']
 
-def parse_results(data, analysers, spec_fields, log_type):
+def parse_results(data, analysers, log_type):
   """ Parses a testrun document into the specified analyser"""
   template = {}
-  for field in basic_fields:
-    template[field] = data.get(field, None)
-  for field in spec_fields:
+  for field in parametric_fields:
     template[field] = data.get(field, None)
 
   results = None
@@ -83,9 +80,6 @@ def parse_results(data, analysers, spec_fields, log_type):
 def generate_query(args):
   query = pyes.query.ConstantScoreQuery()
 
-  spec_fields = []
-  strip_fields = args.get("strip_fields", False)
-
   for field in parametric_fields:
     if field in args:
       val = args.get(field)
@@ -100,20 +94,15 @@ def generate_query(args):
         or_filters.append(pyes.filters.ANDFilter(and_filters))
       query.add(pyes.filters.ORFilter(or_filters))
 
-      if not strip_fields or len(or_filters) > 1:
-        spec_fields.append(field)
-    else:
-      spec_fields.append(field)
-
   if "from" in args and "to" in args:
     erange = pyes.utils.ESRange("date", from_value=args.get("from"), to_value=args.get("to"))
     query.add(pyes.filters.RangeFilter(erange))
 
   print "Query: %s" % query.serialize()
 
-  return (query, spec_fields)
+  return query
 
-def build_analysers(spec_fields, args):
+def build_analysers(args):
   analyser_names = args.get("analysers", ["build"])
   analysers = []
   for name in analyser_names:
@@ -140,8 +129,7 @@ def build_analysers(spec_fields, args):
   outputters = []
   for analyser in analysers:
     headers = []
-    headers.extend(basic_fields)
-    headers.extend(spec_fields)
+    headers.extend(parametric_fields)
     headers.extend(analyser.get_headers())
 
     a_formatter = formatter(headers=headers)
@@ -166,7 +154,7 @@ def retrieve_data(conn, query, from_i, size, args):
 
   return data
 
-def analyse_data(data, outputters, spec_fields, args):
+def analyse_data(data, outputters, args):
   analysers = [o.analyser for o in outputters]
 
   types = set()
@@ -183,7 +171,7 @@ def analyse_data(data, outputters, spec_fields, args):
       if log_type == "testruns" and not dp['_source']['testruns']:
         errors.append(dp)
       else:
-        parse_results(dp['_source'], analysers, spec_fields, log_type)
+        parse_results(dp['_source'], analysers, log_type)
 
   for outputter in outputters:
     outputter.output_records()
@@ -191,8 +179,8 @@ def analyse_data(data, outputters, spec_fields, args):
   return errors
 
 def request_data(args):
-  (query, spec_fields) = generate_query(args)
-  outputters = build_analysers(spec_fields, args)
+  query = generate_query(args)
+  outputters = build_analysers(args)
 
   address = args.get("es_server", "localhost:9200")
   print "Connecting to: %s" % address
@@ -211,7 +199,7 @@ def request_data(args):
   errors = []
   for s in splits:
     data = retrieve_data(conn, query, s, batch, args)
-    e = analyse_data(data, outputters, spec_fields, args)
+    e = analyse_data(data, outputters, args)
     errors.extend(e)
 
   if errors:
@@ -244,6 +232,9 @@ def cli():
   filter_options.add_argument("--testgroup", help="Testgroup to query")
   filter_options.add_argument("--os", help="OS to query")
   filter_options.add_argument("--buildtype", help="Buildtype to query")
+  filter_options.add_argument("--revision", help="A specific revision to query")
+  filter_options.add_argument("--starttime", help="A specific startime to query")
+  filter_options.add_argument("--machine", help="A specific machine to query")
 
   # result size options
   retrieval_options = parser.add_argument_group('Retrieval Options')
@@ -263,9 +254,6 @@ def cli():
   output_options.add_argument("--analyser", dest="analysers",
                               help="Analyser to use for summarization (can specify multiple)",
                               choices=analyser_classes.keys(), action="append")
-  output_options.add_argument("--strip-spec-fields", dest="strip_fields",
-                              help="Remove fields constrained by a spec option from output",
-                              action="store_true")
 
   options = parser.parse_args()
 
@@ -275,7 +263,6 @@ def cli():
              "size":options.size,
              "format":options.format,
              "analysers":options.analysers or ['build'],
-             "strip_fields":options.strip_fields,
              "index":options.index,
              "batch":options.batch,
              }
@@ -296,6 +283,12 @@ def cli():
     request.update({"buildtype":options.buildtype})
   if options.output:
     request.update({"output":options.output})
+  if options.revision:
+    request.update({"revision":options.revision})
+  if options.starttime:
+    request.update({"starttime":options.starttime})
+  if options.machine:
+    request.update({"machine":options.machine})
 
   request_data(request)
 
