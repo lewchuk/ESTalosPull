@@ -158,8 +158,8 @@ class ComponentAnalyser(BaseAnalyser):
   def __init__(self):
     BaseAnalyser.__init__(self)
     self.max_tests = -1
-    self.index = 1
-    self.headers = ['index', 'test_name', 'test_runs', 'max', 'min', 'test_0', 'graph_median', 'new_median', 'new_average', 'new_std_dev']
+    self.build_index = 1
+    self.headers = ['build_id', 'test_name', 'test_runs', 'max', 'min', 'test_0', 'graph_median', 'new_median', 'new_average', 'new_std_dev']
     self.suffix = "components"
 
   def parse_data(self, data, template):
@@ -175,24 +175,23 @@ class ComponentAnalyser(BaseAnalyser):
       result['new_average'] = avg
       result['new_std_dev'] = std_dev
       result['test_runs'] = len(comp.values)
-      result['index'] = self.index
+      result['build_id'] = self.build_index
       self.results.append(result)
-    self.index += 1
+    self.build_index += 1
 
 class RunAnalyser(BaseAnalyser):
   """ Returns a result for each run of every component of a test """
 
   def __init__(self):
     BaseAnalyser.__init__(self)
-    self.index = 1
-    self.headers = ['index', 'test_name', 'run_num', 'value']
+    self.build_index = 1
+    self.headers = ['build_id', 'test_name', 'run_num', 'value']
     self.suffix = "runs"
 
   def parse_data(self, data, template):
     for name, comp in data.components.items():
       test_template = template.copy()
-      test_template['index'] = self.index
-      self.index += 1
+      test_template['build_id'] = self.build_index
       test_template['test_name'] = name
       for pos, value in enumerate(comp.values):
         result = test_template.copy()
@@ -200,6 +199,7 @@ class RunAnalyser(BaseAnalyser):
         # cast to int so as not to give false impression of precision
         result['value'] = int(value)
         self.results.append(result)
+    self.build_index += 1
 
 class RunDifferenceAnalyser(RunAnalyser):
   """ Returns a result for the difference in run value from the previous """
