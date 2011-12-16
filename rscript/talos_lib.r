@@ -43,7 +43,7 @@ shorten_machine_name <- function(machine) {
 # Load a csv and add additional information
 load_data <- function(source, suffix, shorten_uri=TRUE,sort_data=FALSE) {
   data <- read.csv(file=paste(source, "_", suffix, ".csv", sep=""))
-  if ('date' %in% names(data)) {
+  if ('starttime' %in% names(data)) {
     data <- add_date_to_frame(data)
   }
   if (shorten_uri) {

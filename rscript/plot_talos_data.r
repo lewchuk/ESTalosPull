@@ -84,7 +84,7 @@ plot_stacked_medians <- function(component_data) {
 plot_stacked_runs <- function(run_data, with_transparency=FALSE) {
   test = unique(run_data$test_name)[1]
   os_name = unique(run_data$os)[1]
-  p <- ggplot(data=run_data, aes(x=factor(run_num), y=value, group=index))
+  p <- ggplot(data=run_data, aes(x=factor(run_num), y=value, group=build_id))
   if (with_transparency) {
     p <- p + geom_line(colour = alpha("black", 1/5))
   } else {
@@ -104,10 +104,14 @@ plot_stacked_runs_with_mean <- function(run_data, run_means,  with_transparency=
 }
 
 # Plot the histogram of run values
-plot_run_histogram <- function(run_data, trim_size=1, bin_breaks=60) {
+plot_run_histogram <- function(run_data, trim_size=1, bin_breaks=60, bin_size=NULL) {
     run_data_trim = run_data[order(run_data$value)[0:(trim_size*dim(run_data)[1])],]
     ra = range(run_data_trim$value)
-    bw = max(1, (ra[2] - ra[1]) / bin_breaks)
+    if (is.null(bin_size)) {
+        bw = max(1, (ra[2] - ra[1]) / bin_breaks)
+    } else {
+        bw = bin_size
+    }
     test = unique(run_data$test_name)[1]
     os_name = unique(run_data$os)[1]
     plot <- ggplot(data = run_data_trim, aes(x=value))
