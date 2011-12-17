@@ -1,0 +1,2 @@
+python ../espull.py --es-server=elasticsearch1.metrics.sjc1.mozilla.com:9200 --index=talos --from=2011-11-01 --to=2011-11-15 --testsuite=tsvg --format=csv --analyser=run --all --tree=inbound --output=tsvg_sample
+python ../espull.py --es-server=elasticsearch1.metrics.sjc1.mozilla.com:9200 --index=talos --from=2011-11-01 --to=2011-11-15 --testsuite=tdhtml --format=csv --analyser=run --all --tree=inbound --output=tdhtml_sample --testgroup="chrome|chrome_mac"
