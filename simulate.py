@@ -36,6 +36,8 @@
 
 import argparse
 import random
+import os.path
+from datetime import datetime
 
 from statlib import stats
 
@@ -59,7 +61,7 @@ class Simulation(object):
           simulation_result - the ratios of detection for this sample size
   """
 
-  def __init__(self, source_data, sample_size, threshold=0.01):
+  def __init__(self, source_data, sample_size, test_name, threshold=0.01):
     self.data = source_data
     self.popmean = stats.mean(source_data)
     self.sample_size = sample_size
@@ -68,14 +70,16 @@ class Simulation(object):
     self.simulation_result = {}
     self.threshold = threshold
     self.index = 0
+    self.test_name = test_name
+    self.template = {'sample_size' : self.sample_size, 'test_name' : self.test_name }
 
   def analyse_sample_set(self, samples):
     """ Analyses a set of sample of length sample_size """
-    result = {'sample_size' : self.sample_size,
-              'index' : self.index,
-              'mean' : get_average(samples)[0],
-              'median': get_median(samples),
-             }
+    result = self.template.copy()
+    result.update( { 'index' : self.index,
+                     'mean' : get_average(samples)[0],
+                     'median': get_median(samples),
+                   } )
     self.rev_results.append(result)
     if len(set(samples)) == 1:
       t_prob1 = -1
@@ -85,15 +89,15 @@ class Simulation(object):
       (t_stat, t_prob1) = stats.ttest_1samp(samples, self.popmean)
       (t_stat, t_prob2) = stats.ttest_1samp(samples, min(int(self.popmean * (1-self.threshold)), self.popmean - 1))
       (t_stat, t_prob3) = stats.ttest_1samp(samples, max(int(self.popmean * (1+self.threshold)), self.popmean + 1))
-    result = {'sample_size' : self.sample_size,
-              'index' : self.index,
-              'same' : t_prob1 > 0.05,
-              'same_stat' : t_prob1,
-              'less' : t_prob2 < 0.05,
-              'less_stat' : t_prob2,
-              'more' : t_prob3 < 0.05,
-              'more_stat' : t_prob3,
-             }
+    result = self.template.copy()
+    result.update( { 'index' : self.index,
+                     'same' : t_prob1 > 0.05,
+                     'same_stat' : t_prob1,
+                     'less' : t_prob2 < 0.05,
+                     'less_stat' : t_prob2,
+                     'more' : t_prob3 < 0.05,
+                     'more_stat' : t_prob3,
+                   } )
     self.conf_results.append(result)
 
   def analyse_simulation(self):
@@ -104,11 +108,11 @@ class Simulation(object):
     more_passed = sum([r['more'] for r in self.conf_results if r['more_stat'] != -1])
     same_valid = sum([r['same_stat'] != -1 for r in self.conf_results])
     same_passed = sum([r['same'] for r in self.conf_results if r['same_stat'] != -1])
-    self.simulation_result = {'sample_size' : self.sample_size,
-                             'less_ratio' : float(less_passed)/less_valid,
-                             'more_ratio' : float(more_passed)/more_valid,
-                             'same_ratio' : float(same_passed)/same_valid,
-                            }
+    self.simulation_result = self.template.copy()
+    self.simulation_result.update( { 'less_ratio' : float(less_passed)/less_valid,
+                                     'more_ratio' : float(more_passed)/more_valid,
+                                     'same_ratio' : float(same_passed)/same_valid,
+                                   } )
 
   def run_simulation(self, repetitions):
     """ Runs the simulation repetitions number of times """
@@ -131,7 +135,7 @@ def read_data(source_file):
   return data
 
 
-def run_simulations(source_data, repetitions, sample_sizes, threshold = 0.01):
+def run_simulations(source_data, repetitions, sample_sizes, test_name, threshold = 0.01):
   """ Run a series of simulations on the same source data with a set of sample sizes
 
       Returns a dictionary of key names to arrays of maps with output values.
@@ -141,7 +145,7 @@ def run_simulations(source_data, repetitions, sample_sizes, threshold = 0.01):
   conf_results = []
   detection_results = []
   for s in sample_sizes:
-    sim = Simulation(source_data, s)
+    sim = Simulation(source_data, s, test_name)
     sim.run_simulation(repetitions)
     rev_results.extend(sim.rev_results)
     conf_results.extend(sim.conf_results)
@@ -149,26 +153,60 @@ def run_simulations(source_data, repetitions, sample_sizes, threshold = 0.01):
   return {'rev': rev_results, 'conf': conf_results, 'detect' : detection_results}
 
 def run_sim(args):
+  print "%r" % args.analysers
   random.seed()
-  source_data = read_data(args.source)
   samples = range(args.min_sample, args.max_sample+1)
-  for (key, results) in run_simulations(source_data, args.repetitions, samples, args.threshold).items():
-    headers = results[0].keys()
-    output_file = open(args.output + "_" + key + ".csv", 'w')
-    formatter = CSVFormatter(headers=headers)
-    formatter.output_header(output_file)
-    formatter.output_records(results, output_file)
-    output_file.close()
+  out_files = {}
+
+  for source in args.source:
+    source_data = read_data(source)
+    filename = os.path.basename(source.name)
+    test_name = filename[0:filename.rfind('.')]
+    print "Simulating %s - %s" % (test_name, datetime.now().strftime("%H:%M:%S"))
+
+    for _ in xrange(args.calibrate):
+      start = datetime.now()
+      for (key, results) in run_simulations(source_data, args.repetitions,
+                                            samples, test_name, args.threshold).items():
+        if key not in out_files:
+          headers = results[0].keys()
+          if args.split:
+            f = open(args.output + "_" + filename + "_" + key + ".csv", 'w')
+          else:
+            f = open(args.output + "_simulation_" + key + ".csv", 'w')
+          formatter = CSVFormatter(headers=headers)
+          formatter.output_header(f)
+          out_files[key] = (formatter, f)
+
+        out_files[key][0].output_records(results, out_files[key][1])
+      print "Took: %s" % (datetime.now()-start)
+
+    if args.split:
+      for key, pair in out_files.items():
+        pair[1].close()
+        del out_files[key]
+
+    print "Finished %s - %s" % (test_name, datetime.now().strftime("%H:%M:%S"))
+
+  for _, pair in out_files.items():
+    pair[1].close()
 
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Simulate talos runs with various sample sizes based on a sample of real data.")
-  parser.add_argument("source", help="Data file to use in simulation", type=argparse.FileType('r'))
-  parser.add_argument("output", help="File to write output csv to")
+  parser.add_argument("source", help="Data files to use in simulation", nargs='+', type=argparse.FileType('r'))
+  parser.add_argument("output", help="Prefix to write output csv to")
 
   parser.add_argument("--min_sample", help="smallest sample to simulate", type=int, default=3)
   parser.add_argument("--max_sample", help="largest sample to simulate", type=int, default=20)
   parser.add_argument("--repetitions", help="number of repetitions at each sample size", type=int, default=1000)
   parser.add_argument("--threshold", help="the size of change to detect", type=float, default=0.01)
+  parser.add_argument("--split", help="when multiple source files are specified, don't combine the results of each type into a single file.", action="store_true", default=False)
+  parser.add_argument("--calibrate", help="If specified the simulation will be run the specified number of times allowing for confidence intervals", type=int, default=1)
+  parser.add_argument("--analyser", dest="analysers", help="Additional Output Types (rev "\
+                      "= mean and median of each sample, conf= confidence "\
+                      "probabilities for each sample)", choices=['rev', 'conf', 'detect'],
+                      action="append", default=['detect'])
+
 
   run_sim(parser.parse_args())
