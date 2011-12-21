@@ -23,4 +23,11 @@ Also included in this repository are some samples, which are found in the sample
 * simulation/run\_simulation.sh - will generate samples from the pine branch and run a single simulation on each component.
 * simulation/run\_calibration.sh - will generate samples from the pine branch and calibrate each component using 20 simulations on each.
 
+## Dependencies ##
+
+* pyes - [http://pypi/python.org/pypi/pyes](http://pypi/python.org/pypi/pyes)
+* python-statlib - [http://code.google.com/p/python-statlib/](http://code.google.com/p/python-statlib)
+* ggplot2 - (R library)
+* plyr - (R library)
+
 
